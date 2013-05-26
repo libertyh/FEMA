@@ -2,28 +2,54 @@
 <meta charset="utf-8">
 <link rel="stylesheet" href="rbow2.css" type="text/css" />
 <link rel="stylesheet" href="fema.css" type="text/css" />
+<!--<script type="text/javascript" src="jquery-1.8.3.min.js"></script>-->
+<script type="text/javascript" src="jquery.tablesorter/jquery-latest.js"></script>
+<script type="text/javascript" src="jquery.tablesorter/jquery.tablesorter.js"></script>
 <body>
     <div id = "legend">
-        <div style="font-size: 14px; font-weight: bold; padding-bottom: 5px">Incident Types</div>
-        <span style="color: rgb(239,59,44);"><b>Red:</b></span> Fire, Drought<br/>
-        <span style="color: rgb(241,105,19)"><b>Orange:</b></span> Earthquake, Tornado<br/>
-        <span style="color: rgb(65,171,93)"><b>Green:</b></span> Typhoon, Hurricane, Severe Storm<br/>
-        <span style="color: rgb(66,146,198)"><b>Blue:</b></span> Flooding, Dam/Levee Break<br/>
-        <span style="color: rgb(128,125,186)"><b>Purple:</b></span> Snow, Freezing, Severe Ice Storm<br/>
-        <b>Black:</b> Terrorism, Other<br/>
+        <div style="font-size: 14px; font-weight: bold; padding-bottom: 5px;">Incident Types</div>
+        <table cellpsacing = "2" cellpadding="2" border="0">
+            <tr>
+                <td id="firedrought"></td><td width = "160">Fire, Drought</td>
+                <td id="flood"></td><td>Flooding, Dam/Levee Break</td>
+                
+            </tr>
+            <tr>
+                <td id="quaketornado"></td><td>Earthquake, Tornado</td>
+                <td id="snow"></td><td>Snow, Freezing, Severe Ice Storm</td>
+                
+            </tr>
+            <tr>
+                <td id="typhoon"></td><td>Hurricane, Severe Storm</td>
+                <td id="terrorism"></td><td>Terrorism, Other</td>
+            </tr>
+            </table>
     </div>
 
     <div id="titlediv">
-    <h1>FEMA Assistance by U.S. County</h1>
-    <h2>Data from the FEMA Public Assistance Funded Projects Summary, available at <a href="http://www.fema.gov/library/viewRecord.do?fromSearch=fromsearch&id=6299">FEMA.gov</a></h2>
+    <h1>FEMA Assistance by U.S. County<a href="#datasource"><sup style="font-weight: normal; font-size: 50%">&#8224</sup></a></h1>
+    <p><i>Mouse over counties to see the total FEMA money allocated,<br/>click on a county to see a chart of individual agency requests.</i></p>
     </div>
-<script src="http://d3js.org/d3.v3.min.js"></script>
-<script src="http://d3js.org/queue.v1.min.js"></script>
-<script src="http://d3js.org/topojson.v0.min.js"></script>
-<script src="html5slider.js"></script>
-
+<script type="text/javascript" src="http://d3js.org/d3.v3.min.js"></script>
+<script type="text/javascript" src="http://d3js.org/queue.v1.min.js"></script>
+<script type="text/javascript" src="http://d3js.org/topojson.v0.min.js"></script>
+<script type="text/javascript" src="html5slider.js"></script>
 <script>
-
+$.tablesorter.addParser({ 
+    // set a unique id 
+    id: 'money', 
+    is: function(s) { 
+        // return false so this parser is not auto detected 
+        return false; 
+    }, 
+    format: function(s) { 
+        // format your data for normalization 
+        var str = s.replace(/\$/, '').replace(/,/g,'') ;
+        return parseFloat(str);
+    }, 
+    // set type, either numeric or text 
+    type: 'numeric' 
+});
 // GLOBAL VARIABLES
 var width = 960,
      height = 500;
@@ -43,7 +69,12 @@ var currentIncident;
 var currentIncidentId;
 var currentYear;
 var currentId;
+var prevSvg;
+var currentSvg;
 
+var tooltip = d3.select("body")
+      	.append("div")
+      	.attr("class", "tooltip");
 var quantize = d3.scale.quantize()
 // Cast values into bins for colormap
     .domain([7, 19])
@@ -58,41 +89,72 @@ queue() // load files
     .defer(d3.tsv, "FEMA_by_year.tsv") // Data on FEMA assistance by date for each county
     .await(ready);
 
+function addColumn(tblId, moneyCol) {
+    var oRows = document.getElementById('viz').getElementsByTagName('tr');
+    
+	var tblHeadObj = document.getElementById(tblId).tHead;
+	for (var h=0; h<tblHeadObj.rows.length; h++) {
+		var newTH = document.createElement('th');
+		tblHeadObj.rows[h].appendChild(newTH);
+		newTH.innerHTML = '';
+		newTH.className = 'rightth';
+	}
+
+	var tblBodyObj = document.getElementById(tblId).tBodies[0];
+	for (var i=0; i<tblBodyObj.rows.length; i++) {
+		var newCell = tblBodyObj.rows[i].insertCell(-1);
+		newCell.className = 'chartstuff';
+		newCell.id = 'chartstuff'+i;
+	    var chart = d3.select("#chartstuff"+i)
+	     .append("svg")
+         .attr("width", "200px")
+         .attr("height", "25");
+       var x = d3.scale.linear()
+           .domain([0, d3.max(moneyCol)])
+           .range([0, 200]);
+         chart.append("rect")  
+           .attr("y",2)
+           .attr("height", 25)
+           .transition()
+           .attr("width", (moneyCol[i]/d3.max(moneyCol))*200)
+           .attr("class", function() { return "c" + currentIncident[currentId] + "q5-9"; })
+           .duration(1000)
+           .delay(100);
+	}
+}
+
 function updateTable(currentId, currentYear) {
     // Update the table containing information about the currently selected county
-    var oldTable = d3.select("#viz table")
-      .remove();
-    var oldDiv = d3.select("#viz div")
-        .remove();
-    var oldText = d3.select("#viz h3")
-      .remove();
-    var oldChart = d3.select(".chart")
-      .remove();
+    d3.select("#viz table").remove();
+    d3.select("#viz div").remove();
+    d3.select("#viz h3").remove();
+    d3.select(".chart").remove();
     var ctitle = d3.select("#viztitle")
       .html("<h3>" + currentCounty[currentId] + " County, " + currentState[currentId] + " " + currentYear + "</h3>");
       
-    if (currentRateById[currentId]==0) {
+    if (currentRateById[currentId]==0 || typeof currentRateById[currentId] == 'undefined') {
         var table = d3.select("#viz")
         .append("div")
         .html("&nbsp;&nbsp;&nbsp;&nbsp;<i>No FEMA requests for selected county and year.</i>");
     }
     else {
+          ctitle.html(ctitle.html() + "<p class='small'><i>Click column headers to sort.</i></p>");
           var fname = "countydata/"+ currentYear + "_" + currentId + ".tsv"
           d3.text(fname, function(datasetText) {
             var parsedCSV = d3.tsv.parseRows(datasetText);
-            for (row = 0; row<parsedCSV.length; row++) {
-                parsedCSV[row][parsedCSV[row].length]= ' ';
-            }
             var colnames = parsedCSV[0];
             parsedCSV.splice(0,1);
             var moneyCol = [];
             for (row = 0; row<parsedCSV.length; row++) {
                 moneyCol.push(parseInt(parsedCSV[row][5].replace(/,/g,"").replace("$","")));
             }
+            
             var table = d3.select("#viz")
                 .append("table")
+                .attr("id", "viztab")
+                .attr("class", "tablesorter")
                 .style("border-collapse", "collapse")
-                .style("border", "2px black solid")
+                //.style("border", "2px black solid")
                 thead = table.append("thead"),
                 tbody = table.append("tbody");
                 
@@ -101,6 +163,7 @@ function updateTable(currentId, currentYear) {
                     .data(colnames)
                     .enter()
                     .append("th")
+                    .style("border","1px solid black")
                     .text(function(column) { return column;});
 
                 var rows = tbody
@@ -112,41 +175,31 @@ function updateTable(currentId, currentYear) {
                 .enter().append("td")
                 .style("border", "1px black solid")
                 .style("padding", "5px")
+                .attr("class", function(d){ return d;})
                 .on("mouseover", function(){d3.select(this).style("background-color", "aliceblue")})
                 .on("mouseout", function(){d3.select(this).style("background-color", "white")})
                 .text(function(d){return d;})
                 .style("font-size", "12px");
                 
-                if (moneyCol.length > 1) {
-                    //Only show the barchart if there is more than one item
-                  //var chartdiv = d3.select("#chart")
-                  var oRows = document.getElementById('viz').getElementsByTagName('tr')
-                  var rowsH=[];//rows' heights' array
-                  var totalH=0;
-                  for(var i=0;i<oRows.length;i++){
-                      rowsH[i]=oRows[i].offsetHeight;
-                      totalH += rowsH[i];
-                  }
-                  var chart = d3.select("#chart")
-                      .append("svg")
-                      .attr("class", "chart")
-                      .attr("height", totalH);
-                  var x = d3.scale.linear()
-                      .domain([0, d3.max(moneyCol)])
-                      .range([0, 200]);
-                  chart.selectAll("rect")
-                      .data(moneyCol)
-                      .enter().append("rect")
-                      .attr("y", function(d, i) { return i * (rowsH[0]-0.4); })
-                      .attr("height", (rowsH[0]-0.4))
-                      .transition()
-                      .attr("width", x)
-                      .attr("class", function() { return "c" + currentIncident[currentId] + "q5-9"; })
-                      .duration(1000)
-                      .delay(100); 
-                    };
+                  addColumn('viztab', moneyCol);
+                    $("#viztab").tablesorter({
+                        headers: {5: { sorter: 'money' }
+                    }})
             });
         }
+}
+
+function makeTooltip(d, tooltip, svgobj) {
+     tooltip.style("visibility","visible")
+            .style("background", "#eee")
+            .style("border","1px solid #444")
+            .style("padding", "4px");
+      var moneySpent = (Math.exp(currentRateById[d.id])-1);
+      if (isNaN(moneySpent)) { moneySpent=0; }
+      var moneyFmt = d3.format(",.2f");
+      tooltip.html("<b>" + currentCounty[d.id] + " County</b><br/>$" + moneyFmt(moneySpent) );
+      tooltip.style("Position","absolute");
+      svgobj.style("stroke","red","stroke-width","3");
 }
 function ready(error, us, fips, incidents, femaassist) { 
 // receives us.json and FEMA_by_year.tsv files
@@ -156,11 +209,8 @@ function ready(error, us, fips, incidents, femaassist) {
   var incidentByFips = {};
   var baseWidth = 564; //564
   var baseHeight = 400; //400
-  var tooltip = d3.select("body")
-      	.append("div")
-      	.attr("class", "tooltip");
 
-  currentYear = '1998';
+  currentYear = '2011';
   femaassist.forEach(function(d) { rateById[d.id] = +d[currentYear]; });
   fips.forEach(function(d) { countyByFips[d.FIPS] = d['County']; });
   fips.forEach(function(d) { stateByFips[d.FIPS] = d['State']; });
@@ -187,23 +237,22 @@ function ready(error, us, fips, incidents, femaassist) {
         }
           })
       .attr("d", path)
-      .on("mouseover", function(d) {
-              tooltip.style("visibility","visible")
-                    .style("background", "#eee")
-                    .style("border","1px solid #444")
-                    .style("padding", "4px");
-              var moneySpent = (Math.exp(currentRateById[d.id])-1);
-              if (isNaN(moneySpent)) { moneySpent=0; }
-              var moneyFmt = d3.format(",.2f");
-              tooltip.html("<b>" + currentCounty[d.id] + " County</b><br/>$" + moneyFmt(moneySpent) );
-              tooltip.style("Position","absolute");
-              d3.select(this).style("stroke","red");})
-      .on("mousemove", function() {return tooltip.style("top", (event.pageY-10)+"px").style("left",(event.pageX+10)+"px");})
-      .on("mouseout", function() { d3.select(this).style("stroke","none"); 
-            tooltip.text("");
-            tooltip.style("visibility","hidden")})
+      .on("mouseover", function(d) { makeTooltip(d, tooltip, d3.select(this));})
+      .on("mousemove", function() {
+            return tooltip.style("top", (event.pageY-10)+"px").style("left",(event.pageX+10)+"px"); 
+          })
+      .on("mouseout", function(d) { 
+            if (d.id != currentId) {
+                d3.select(this).style("stroke","none"); 
+                tooltip.text("");
+                tooltip.style("visibility","hidden");
+            };
+            })
       .on("click", function(d) {
-            currentId=d.id;
+            prevSvg = currentSvg;
+            if (prevSvg) { prevSvg.style("stroke","none"); }
+            currentSvg = d3.select(this);
+            currentId = d.id;
             updateTable(currentId, currentYear);
           });
 
@@ -232,12 +281,45 @@ function updateMap(year) {
                return "default_col";
            }
        });
-    updateTable(currentId, currentYear);
+    // Now update the table if we have already selected a county
+    if (currentId) updateTable(currentId, currentYear);
 }
 
+function makeColorBar(id, r1) {
+    var legendsvg = d3.select(id).append("svg:svg")
+        .attr("width", "130px")
+        .attr("height", "16px");
+
+    var colorData = d3.range(9);
+
+    var rects = legendsvg.selectAll("rect")
+        .data(colorData);
+    
+    rects.enter()
+      .append("rect")
+      .attr({
+        width: 12,
+        height: 15,
+        y: 1,
+        x: function(d,i) {
+          return i * 13 ;
+        },
+        class: function(d,i) {
+               return "c" + r1 + "q" + d + "-9"; 
+            //}
+        }
+      })
+}
+makeColorBar("#firedrought","0");
+makeColorBar("#quaketornado","1");
+makeColorBar("#typhoon","2");
+makeColorBar("#flood","3");
+makeColorBar("#snow","4");
+makeColorBar("#terrorism","5");
+
 </script>
-<div id="slidecontainer"><input type="range" value="1998" min="1998" max="2012" step="1" id="slide" /></div>
-<div id="sliderAmount">1998</div>
+<div id="slidecontainer"><i>Drag slider to change the year displayed:</i><br/><input type="range" value="2011" min="1999" max="2011" step="1" id="slide" /></div>
+<div id="sliderAmount">2011</div>
 <div id="maincontainer">
     <div id="viztitle"></div>
     <div id="columnwrapper">
@@ -246,6 +328,8 @@ function updateMap(year) {
     </div>
     <div id="viz">
     </div>
+    <br/>
+    <div style="clear: both;"><h2><a name="datasource"><sup>&#8224</sup></a>Data from the FEMA Public Assistance Funded Projects Summary, available at <a href="http://www.fema.gov/library/viewRecord.do?fromSearch=fromsearch&id=6299">FEMA.gov</a></h2></div>
     <div id="footer">Copyright 2013 Liberty Hamilton</div>
 </div>
 <script>
