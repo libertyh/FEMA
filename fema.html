@@ -6,30 +6,48 @@
 <script type="text/javascript" src="jquery.tablesorter/jquery-latest.js"></script>
 <script type="text/javascript" src="jquery.tablesorter/jquery.tablesorter.js"></script>
 <body>
-    <div id = "legend">
-        <div style="font-size: 14px; font-weight: bold; padding-bottom: 5px;">Incident Types</div>
-        <table cellpsacing = "2" cellpadding="2" border="0">
-            <tr>
-                <td id="firedrought"></td><td width = "160">Fire, Drought</td>
-                <td id="flood"></td><td>Flooding, Dam/Levee Break</td>
-                
-            </tr>
-            <tr>
-                <td id="quaketornado"></td><td>Earthquake, Tornado</td>
-                <td id="snow"></td><td>Snow, Freezing, Severe Ice Storm</td>
-                
-            </tr>
-            <tr>
-                <td id="typhoon"></td><td>Hurricane, Severe Storm</td>
-                <td id="terrorism"></td><td>Terrorism, Other</td>
-            </tr>
-            </table>
-    </div>
-
+    <div id = "main">
     <div id="titlediv">
     <h1>FEMA Assistance by U.S. County<a href="#datasource"><sup style="font-weight: normal; font-size: 50%">&#8224</sup></a></h1>
-    <p><i>Mouse over counties to see the total FEMA money allocated,<br/>click on a county to see a chart of individual agency requests.</i></p>
+    <p><i>Mouse over counties to see the total FEMA money allocated, click on a county to see a chart of individual agency requests.</i></p>
     </div>
+    <div id = "extrainfo">
+        <p><span style="font-size: 18px; font-family: Georgia, Times New Roman, Serif;">Selected Incidents by Year&nbsp;&nbsp;</span>
+        <select id="selectedInc" onChange="selectInc();">
+            <option value="2011"></option>
+            <option id="inc2001">2001</option>
+            <option id="inc2003">2003</option>
+            <option id="inc2005">2005</option>
+            <option id="inc2010">2010</option>
+            <option id="inc2011">2011</option>
+        </select>
+        </p>
+        <div id="incdesc"></div>
+        <div id = "legend">
+            <div style="font-size: 14px; font-weight: normal; padding-bottom: 5px; font-family: Georgia, Times New Roman, Serif;">Incident Types</div>
+            <table cellpsacing = "2" cellpadding="2" border="0">
+                <tr>
+                    <td id="firedrought"></td><td width = "160">Fire, Drought</td>                
+                </tr>
+                <tr>
+                    <td id="quaketornado"></td><td>Earthquake, Tornado</td>                
+                </tr>
+                <tr>
+                    <td id="typhoon"></td><td>Hurricane, Severe Storm</td>
+                </tr>
+                <tr>
+                    <td id="flood"></td><td>Flooding, Dam/Levee Break</td>
+                </tr>
+                <tr>
+                    <td id="snow"></td><td>Snow, Freezing, Severe Ice Storm</td>
+                </tr>
+                <tr>
+                    <td id="terrorism"></td><td>Terrorism, Other</td>
+                </tr>
+                </table>
+        </div>
+    </div>
+    
 <script type="text/javascript" src="http://d3js.org/d3.v3.min.js"></script>
 <script type="text/javascript" src="http://d3js.org/queue.v1.min.js"></script>
 <script type="text/javascript" src="http://d3js.org/topojson.v0.min.js"></script>
@@ -51,12 +69,12 @@ $.tablesorter.addParser({
     type: 'numeric' 
 });
 // GLOBAL VARIABLES
-var width = 960,
+var width = 850,
      height = 500;
     
 var path = d3.geo.path();
 
-var svg = d3.select("body").append("svg")
+var svg = d3.select("#main").append("svg")
     .attr("width", width)
     .attr("height", height);
 
@@ -107,16 +125,16 @@ function addColumn(tblId, moneyCol) {
 		newCell.id = 'chartstuff'+i;
 	    var chart = d3.select("#chartstuff"+i)
 	     .append("svg")
-         .attr("width", "200px")
+         .attr("width", "100px")
          .attr("height", "25");
        var x = d3.scale.linear()
            .domain([0, d3.max(moneyCol)])
-           .range([0, 200]);
+           .range([0, 100]);
          chart.append("rect")  
            .attr("y",2)
            .attr("height", 25)
            .transition()
-           .attr("width", (moneyCol[i]/d3.max(moneyCol))*200)
+           .attr("width", (moneyCol[i]/d3.max(moneyCol))*100)
            .attr("class", function() { return "c" + currentIncident[currentId] + "q5-9"; })
            .duration(1000)
            .delay(100);
@@ -130,7 +148,7 @@ function updateTable(currentId, currentYear) {
     d3.select("#viz h3").remove();
     d3.select(".chart").remove();
     var ctitle = d3.select("#viztitle")
-      .html("<h3>" + currentCounty[currentId] + " County, " + currentState[currentId] + " " + currentYear + "</h3>");
+      .html("<h3>" + currentCounty[currentId] + " County, " + currentState[currentId] +  " " + currentYear + "</h3>");
       
     if (currentRateById[currentId]==0 || typeof currentRateById[currentId] == 'undefined') {
         var table = d3.select("#viz")
@@ -249,6 +267,10 @@ function ready(error, us, fips, incidents, femaassist) {
             };
             })
       .on("click", function(d) {
+            var myList=document.getElementById("selectedInc");
+            console.log(myList);
+            myList.selectedIndex = '';
+            document.getElementById("incdesc").innerHTML='';
             prevSvg = currentSvg;
             if (prevSvg) { prevSvg.style("stroke","none"); }
             currentSvg = d3.select(this);
@@ -332,6 +354,8 @@ makeColorBar("#terrorism","5");
     <div style="clear: both;"><h2><a name="datasource"><sup>&#8224</sup></a>Data from the FEMA Public Assistance Funded Projects Summary, available at <a href="http://www.fema.gov/library/viewRecord.do?fromSearch=fromsearch&id=6299">FEMA.gov</a></h2></div>
     <div id="footer">Copyright 2013 Liberty Hamilton</div>
 </div>
+
+</div>
 <script>
 var slide = document.getElementById('slide'),
     sliderDiv = document.getElementById("sliderAmount");
@@ -339,5 +363,33 @@ var slide = document.getElementById('slide'),
 slide.onchange = function() {
     sliderDiv.innerHTML = this.value;
     updateMap(this.value); 
+}
+function drawCircle(fips, myYear) {
+    d3.select("svg .counties")
+}
+function selectInc() {
+    var myList=document.getElementById("selectedInc");
+    myYear = myList.options[myList.selectedIndex].text;
+    var incDescriptions = {'': [],
+                          '2001': ['In 2001, we see aid for the 9/11 attacks in red around the New York City area. Despite the “terrorist” category available for FEMA aid, these were basically all classified as aid for fires — I’m not sure if that’s because they were classified as such before it was known why the attacks were carried out, or if there is another reason.'],
+                        '2003': ['In 2003, we can see in red the “2003 Firestorm”, including the <a href="http://en.wikipedia.org/wiki/Cedar_Fire" target="new">Cedar Fire</a> and <a href="http://en.wikipedia.org/wiki/Old_Fire" target="new">Old Fire</a> that devastated much of Southern California.'],
+                        '2005': ['In 2005, the whole gulf coast lights up in green as <a href="http://en.wikipedia.org/wiki/Hurricane_Katrina" target="new">Hurricane Katrina</a> devastated the landscape.'],
+                        '2010': ['In 2010, there is a swath of purple around the northeast, representing “Snowmageddon”, the blizzard that <a href="http://www.google.com/hostednews/afp/article/ALeqM5j3HVBhfkkHN4c9TlIAxNkxjbwR0A" target="new">closed down the Federal Government</a>.'],
+                        '2011': ['In 2011, we see a patch of blue following the border between Kansas and Missouri up through Iowa and Nebraska and even to the Dakotas.  This represents the <a href="http://en.wikipedia.org/wiki/2011_Missouri_River_floods" target="new">2011 Missouri River flooding</a>, which was said to result from increased snowfall in the Rockies that year.']};
+    var selCounty = {'': [''],
+                     '2001': [36059],
+                     '2003': [6071],
+                     '2005': [28047],
+                     '2010': [11001],
+                     '2011': [19155]};
+    document.getElementById("incdesc").innerHTML=incDescriptions[myYear];
+    drawCircle(selCounty[myYear], myYear);
+    if ( myYear == '') { myYear = 2011; };
+    updateMap(myYear);
+    sliderDiv.innerHTML = myYear;
+    slide.value = myYear;
+    if (selCounty != '') {
+        updateTable(selCounty[myYear], myYear);
+    }
 }
 </script>
