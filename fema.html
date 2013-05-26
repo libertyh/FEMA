@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<link rel="stylesheet" href="rbow2.css" type="text/css" />
+<style>
+
+body {
+    font-family: Helvetica, Arial, Sans-Serif;
+    background: #e7ecfa;
+    margin: 0;
+    padding: 0;
+}
+body h1{
+    font-size: 24px;
+}
+body h2 {
+    font-size: 12px;
+}
+.states {
+  fill: none;
+  stroke: #999;
+  stroke-linejoin: round;
+}
+
+#content {
+    align: center
+    position: relative;
+}
+
+#legend {
+    position: absolute;
+    left: 555px;
+    padding: 10px;
+    stroke: #999;
+    background: #fff;
+    font-size: 11px;
+    border: 1px solid #444; 
+    z-index: 2;
+}
+#slide { width: 500px !important;
+    }
+
+#sliderAmount {
+    margin-left: 150px;
+}
+#slidecontainer {
+    margin-left: 150px;
+}
+#countyPopup {
+    fill: #888;
+    stroke: #000;
+}
+#viz {
+    float: left;
+    width: 850px; /*Width of left column in percentage*/
+    margin-left: -100%;
+}
+#viz table {
+    background-color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    margin-left: 20px;
+}
+
+#viz table thead {
+    font-weight: bold;
+    font-size: 12px;
+    text-align: left;
+}
+#viz table th {
+    border: 1px solid #000;
+    padding: 5px;
+}
+#viz table td {
+    wtext-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    max-width: 300px;
+}
+.tooltiptext .tooltip {
+    position: absolute;
+  	z-index: 10;
+  	background: #eee;
+  	font-family: Helvetica, Arial, Sans-Serif;
+}
+.tooltiptitle {
+    position: absolute;
+  	z-index: 10;
+    font-family: Helvetica, Arial, Sans-Serif;
+    font-size: 14px;
+    font-weight: bold;
+}
+svg g path{ fill: rgb(255,255,255);
+    z-index: -1}
+            /*stroke: #f2f2f3}*/
+
+/*input[type='range'] {  
+    -webkit-appearance: none;  
+    background-color: gray;  
+}  
+  
+input[type='range']::-webkit-slider-thumb {  
+    -webkit-appearance: none;  
+    background-color: #444;  
+    width: 15px;  
+    height: 20px;  
+}*/
+input[type=range]:first-of-type {
+  width: 200px;
+}
+.colorbar .axis line{
+    fill: none;
+    stroke: black;
+    shape-rendering: crispEdges;
+}
+ 
+.colorbar .axis .domain{
+    fill: none;
+    stroke: black;
+    shape-rendering: crispEdges;
+}
+.chart rect {
+   stroke: white;
+   /*fill: steelblue;*/
+   margin: 0px;
+   padding: 0px;
+   float: left;
+}
+#chart {
+    /*float: right;
+    white-space: nowrap;*/
+    margin-top: 25px;
+    margin-left: 850px; /*Margins for right column. Should be "0 contentcolumnWidth 0 rightcolumnWidth*/
+}
+#full_width_div {
+    /*width: 1150px;*/
+    overflow: hidden;
+}
+
+#columnwrapper{
+    float: left;
+    width: 100%;
+}
+#footer{
+    clear: left;
+    width: 99%;
+    background: #fff;
+    color: #000;
+    text-align: center;
+    padding: 4px 0;
+    margin-top: 50px;
+    border: 1px solid #555;
+    font-size: 10px;
+}
+#titlediv{
+    margin-left: 20px;
+}
+#viztitle{
+    margin-left: 20px;
+}
+#maincontainer {
+    min-width: 1000px;
+}
+
+</style>
+<body>
+    <div id = "legend">
+        <div style="font-size: 14px; font-weight: bold; padding-bottom: 5px">Incident Types</div>
+        <span style="color: rgb(239,59,44);"><b>Red:</b></span> Fire, Drought<br/>
+        <span style="color: rgb(241,105,19)"><b>Orange:</b></span> Earthquake, Tornado<br/>
+        <span style="color: rgb(65,171,93)"><b>Green:</b></span> Typhoon, Hurricane, Severe Storm<br/>
+        <span style="color: rgb(66,146,198)"><b>Blue:</b></span> Flooding, Dam/Levee Break<br/>
+        <span style="color: rgb(128,125,186)"><b>Purple:</b></span> Snow, Freezing, Severe Ice Storm<br/>
+        <b>Black:</b> Terrorism, Other<br/>
+    </div>
+
+    <div id="titlediv">
+    <h1>FEMA Assistance by U.S. County</h1>
+    <h2>Data from the FEMA Public Assistance Funded Projects Summary, available at <a href="http://www.fema.gov/library/viewRecord.do?fromSearch=fromsearch&id=6299">FEMA.gov</a></h2>
+    </div>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://d3js.org/queue.v1.min.js"></script>
+<script src="http://d3js.org/topojson.v0.min.js"></script>
+<script src="html5slider.js"></script>
+
+<script>
+
+var width = 960,
+     height = 500;
+    
+var path = d3.geo.path();
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+    //.attr("class", "Rbow");
+
+var femadata;
+var fipsdata;
+var incidentsdata;
+var currentRateById;
+var currentCounty;
+var currentIncident;
+var currentIncidentId;
+var currentYear;
+
+var quantize = d3.scale.quantize()
+    .domain([7, 19])
+    .range(d3.range(9).map(function(i) {
+            return "q" + i + "-9";
+    }))
+    
+queue()
+    .defer(d3.json, "us.json")
+    .defer(d3.tsv, "FIPS2.tsv")
+    .defer(d3.tsv, "Incident_by_county.tsv")
+    .defer(d3.tsv, "FEMA_by_year.tsv")
+    .await(ready);
+
+function ready(error, us, fips, incidents, femaassist) { 
+// receives us.json and FEMA_by_year.tsv files
+  var rateById = {};
+  var countyByFips = {};
+  var incidentByFips = {};
+  var baseWidth = 564; //564
+  var baseHeight = 400; //400
+  var tooltip = d3.select("body")
+      	.append("div")
+      	.attr("class", "tooltip");
+
+  currentYear = '1998';
+  femaassist.forEach(function(d) { rateById[d.id] = +d[currentYear]; });
+  fips.forEach(function(d) { countyByFips[d.FIPS] = d['County']; });
+  incidents.forEach(function(d) { incidentByFips[d.id] = d[currentYear]; });
+  
+  femadata = femaassist;
+  fipsdata = fips;
+  incidentsdata = incidents;
+  currentRateById = rateById;
+  currentCounty = countyByFips;
+  currentIncident = incidentByFips;
+  
+  svg.append("g")
+      .attr("class", "counties")
+    .selectAll("path")
+      .data(topojson.object(us, us.objects.counties).geometries)
+    .enter().append("path")
+      .attr("class", function(d) { 
+          if (currentRateById[d.id] > 0) {
+            return "c"+currentIncident[d.id]+quantize(currentRateById[d.id]); 
+        }
+        else {
+            return "default_col";
+        }
+          })
+      //.attr("class","c2q3-9")
+      .attr("d", path)
+      .on("mouseover", function(d) {
+              tooltip.style("visibility","visible")
+                    .style("background", "#eee")
+                    .style("border","1px solid #444")
+                    .style("padding", "4px");
+              var moneySpent = (Math.exp(currentRateById[d.id])-1);
+              if (isNaN(moneySpent)) { moneySpent=0; }
+              var moneyFmt = d3.format(",.2f");
+              tooltip.html("<b>" + currentCounty[d.id] + " County</b><br/>$" + moneyFmt(moneySpent) );
+              tooltip.style("Position","absolute");
+              d3.select(this).style("stroke","red");})
+      .on("mousemove", function() {return tooltip.style("top", (event.pageY-10)+"px").style("left",(event.pageX+10)+"px");})
+      .on("mouseout", function() { d3.select(this).style("stroke","none"); 
+            tooltip.text("");
+            tooltip.style("visibility","hidden")})
+      .on("click", function(d) {
+            var oldTable = d3.select("#viz table")
+              .remove();
+            var oldDiv = d3.select("#viz div")
+                .remove();
+            var oldText = d3.select("#viz h3")
+              .remove();
+            var oldChart = d3.select(".chart")
+              .remove();
+            var ctitle = d3.select("#viztitle")
+              .html("<h3>" + currentCounty[d.id] + " County " + currentYear + "</h3>");
+              
+            if (currentRateById[d.id]==0) {
+                var table = d3.select("#viz")
+                .append("div")
+                .html("&nbsp;&nbsp;&nbsp;&nbsp;<i>No FEMA requests for selected county and year.</i>");
+            }
+            else {
+                  var fname = "countydata/"+ currentYear + "_" + d.id + ".tsv"
+                  d3.text(fname, function(datasetText) {
+                    var parsedCSV = d3.tsv.parseRows(datasetText);
+                    var colnames = parsedCSV[0];
+                    parsedCSV.splice(0,1);
+                    //console.log(parsedCSV);
+                    var moneyCol = [];
+                    for (row = 0; row<parsedCSV.length; row++) {
+                        moneyCol.push(Math.log(1+parseInt(parsedCSV[row][5].replace(/,/g,"").replace("$",""))));
+                    }
+                    //console.log(moneyCol);
+                    var table = d3.select("#viz")
+                        .append("table")
+                        .style("border-collapse", "collapse")
+                        .style("border", "2px black solid")
+                        thead = table.append("thead"),
+                        tbody = table.append("tbody");
+                        
+                        thead.append("tr")
+                            .selectAll("th")
+                            .data(colnames)
+                            .enter()
+                            .append("th")
+                            .text(function(column) { return column;});
+
+                        var rows = tbody
+                        .selectAll("tr")
+                        .data(parsedCSV)
+                        .enter().append("tr")
+                        .selectAll("td")
+                        .data(function(d){return d;})
+                        .enter().append("td")
+                        .style("border", "1px black solid")
+                        .style("padding", "5px")
+                        .on("mouseover", function(){d3.select(this).style("background-color", "aliceblue")})
+                        .on("mouseout", function(){d3.select(this).style("background-color", "white")})
+                        .text(function(d){return d;})
+                        .style("font-size", "12px");
+                        
+                        if (moneyCol.length > 1) {
+                            //Only show the barchart if there is more than one item
+                          //var chartdiv = d3.select("#chart")
+                          var oRows = document.getElementById('viz').getElementsByTagName('tr')
+                          var rowsH=[];//rows' heights' array
+                          var totalH=0;
+                          for(var i=0;i<oRows.length;i++){
+                              rowsH[i]=oRows[i].offsetHeight;
+                              totalH += rowsH[i];
+                          }
+                          //console.log(rowsH);
+                          var chart = d3.select("#chart")
+                              .append("svg")
+                              .attr("class", "chart")
+                              //.attr("width", 200)
+                              //.attr("height", rowsH[0] * moneyCol.length);
+                              .attr("height", totalH);
+                          var x = d3.scale.linear()
+                              .domain([0, d3.max(moneyCol)])
+                              .range([0, 200]);
+                          chart.selectAll("rect")
+                              .data(moneyCol)
+                              .enter().append("rect")
+                              .attr("y", function(d, i) { return i * (rowsH[0]-0.4); })
+                              .attr("height", (rowsH[0]-0.4))
+                              .transition()
+                              .attr("width", x)
+                              .attr("class", function() { return "c" + currentIncident[d.id] + "q5-9"; })
+                              .duration(1000)
+                              .delay(100); 
+                            };
+                            //console.log(currentIncident[d.id]);
+                    });
+                };
+          });
+
+  svg.append("path")
+      .datum(topojson.mesh(us, us.objects.states, function(a, b) { return a.id !== b.id; }))
+      .attr("class", "states")
+      .attr("d", path);
+      
+  svg.append("path")
+        .datum(topojson.object(us, us.objects.land))
+        .attr("class", "states")
+        .attr("d", path);
+}
+
+function updateMap(year) {
+    currentYear = year;
+    femadata.forEach(function(d) { currentRateById[d.id] = +d[currentYear]; });
+    fipsdata.forEach(function(d) { currentCounty[d.FIPS] = d['County']; });
+    incidentsdata.forEach(function(d) { currentIncident[d.id] = d[currentYear]; });
+    
+    svg.select("g").selectAll("path")
+    .attr("class", function(d) { 
+           if (currentRateById[d.id] > 0) {
+               return "c" + currentIncident[d.id] + quantize(currentRateById[d.id]); 
+           }
+           else {
+               return "default_col";
+           }
+       });
+}
+
+</script>
+<div id="slidecontainer"><input type="range" value="1998" min="1998" max="2012" step="1" id="slide" /></div>
+<div id="sliderAmount">1998</div>
+<div id="maincontainer">
+    <div id="viztitle"></div>
+    <div id="columnwrapper">
+        <div id="chart">
+        </div>
+    </div>
+    <div id="viz">
+    </div>
+    <div id="footer">Copyright 2013 Liberty Hamilton</div>
+</div>
+<script>
+var slide = document.getElementById('slide'),
+    sliderDiv = document.getElementById("sliderAmount");
+
+slide.onchange = function() {
+    sliderDiv.innerHTML = this.value;
+    updateMap(this.value); 
+}
+</script>
